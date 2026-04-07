@@ -17,17 +17,32 @@ find_package(OpenSSL REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(JSONCPP REQUIRED jsoncpp)
 
-# Library target
-add_library(nanotuya
+# Optional cloud API support (requires libcurl)
+option(BUILD_WITH_CLOUD "Build TuyaCloud client (requires libcurl)" OFF)
+
+set(NANOTUYA_SOURCES
     src/TuyaProtocol.cpp
     src/TuyaDevice.cpp
 )
+
+if(BUILD_WITH_CLOUD)
+    find_package(CURL REQUIRED)
+    list(APPEND NANOTUYA_SOURCES src/TuyaCloud.cpp)
+endif()
+
+# Library target
+add_library(nanotuya ${NANOTUYA_SOURCES})
 target_include_directories(nanotuya PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
     ${JSONCPP_INCLUDE_DIRS}
 )
 target_link_libraries(nanotuya PUBLIC OpenSSL::Crypto ${JSONCPP_LIBRARIES})
+
+if(BUILD_WITH_CLOUD)
+    target_link_libraries(nanotuya PUBLIC CURL::libcurl)
+    target_compile_definitions(nanotuya PUBLIC NANOTUYA_HAS_CLOUD=1)
+endif()
 
 # Install
 install(TARGETS nanotuya DESTINATION lib)
