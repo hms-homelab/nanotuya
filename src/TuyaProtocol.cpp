@@ -222,10 +222,12 @@ std::vector<uint8_t> TuyaProtocol::makeControlPayload(const std::string& dev_id,
     std::string ts = timestamp();
 
     if (version == TuyaVersion::V34) {
-        // v3.4 uses CONTROL_NEW format
         root["protocol"] = 5;
         root["t"] = static_cast<Json::Int64>(std::stoll(ts));
         Json::Value data;
+        data["devId"] = dev_id;
+        data["uid"] = dev_id;
+        data["t"] = ts;
         data["dps"] = dps;
         root["data"] = data;
     } else {
@@ -294,12 +296,9 @@ std::vector<uint8_t> TuyaProtocol::buildMessage(uint32_t seqno, Command cmd,
     bool use_hmac = (version == TuyaVersion::V34);
     uint32_t integrity_size = use_hmac ? 32 : 4;
 
-    // LENGTH = len(encrypted_data) + integrity_size + 4 (suffix)
-    // Note: outgoing frames do NOT include retcode — that's only in device responses
     uint32_t length = static_cast<uint32_t>(data_to_encrypt.size())
                       + integrity_size + 4;
 
-    // Build header + data (no retcode for outgoing)
     std::vector<uint8_t> frame;
     frame.reserve(HEADER_SIZE + length);
     appendBE32(frame, PREFIX_55AA);

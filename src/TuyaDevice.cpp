@@ -284,8 +284,9 @@ std::optional<TuyaMessage> TuyaDevice::sendReceive(Command cmd,
                                              config_.version, active_key_);
     if (!sendAll(frame)) return std::nullopt;
 
-    // Read response, retrying once if we get an empty/ACK payload
-    for (int attempt = 0; attempt < 2; ++attempt) {
+    bool is_control = (cmd == Command::CONTROL || cmd == Command::CONTROL_NEW);
+
+    for (int attempt = 0; attempt < 5; ++attempt) {
         auto resp_data = readFrame();
         if (resp_data.empty()) {
             if (attempt == 0) continue;
@@ -300,8 +301,15 @@ std::optional<TuyaMessage> TuyaDevice::sendReceive(Command cmd,
             return std::nullopt;
         }
 
-        // Skip empty ACK responses (retry to get the real data)
-        if (msg.payload.empty() && attempt == 0) {
+        // For control commands, accept STATUS/UPDATEDPS as the response
+        // (some devices reply with a status update instead of a control ACK)
+        if (!is_control &&
+            (msg.cmd == Command::STATUS || msg.cmd == Command::UPDATEDPS)) {
+            continue;
+        }
+
+        // Skip empty ACK responses (except on last attempt)
+        if (msg.payload.empty() && attempt < 4) {
             continue;
         }
 
@@ -393,7 +401,7 @@ std::optional<Json::Value> TuyaDevice::queryStatus() {
             continue;
         }
 
-        auto payload = TuyaProtocol::makeStatusPayload(config_.id);
+        auto payload = TuyaProtocol::makeStatusPayload(config_.id, config_.version);
         Command cmd = (config_.version == TuyaVersion::V34)
                           ? Command::DP_QUERY_NEW
                           : Command::DP_QUERY;
@@ -454,7 +462,7 @@ bool TuyaDevice::setValues(const Json::Value& dps) {
             continue;
         }
 
-        auto payload = TuyaProtocol::makeControlPayload(config_.id, dps);
+        auto payload = TuyaProtocol::makeControlPayload(config_.id, dps, config_.version);
         Command cmd = (config_.version == TuyaVersion::V34)
                           ? Command::CONTROL_NEW
                           : Command::CONTROL;
