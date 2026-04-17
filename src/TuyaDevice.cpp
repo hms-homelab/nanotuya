@@ -215,8 +215,8 @@ bool TuyaDevice::negotiateSessionKey() {
         return false;
     }
 
-    // Decrypt payload with local_key (AES-ECB)
-    auto decrypted = TuyaProtocol::decryptECB(config_.local_key, resp_msg.payload);
+    // parseMessage already decrypted the v3.4 payload
+    auto& decrypted = resp_msg.payload;
     if (decrypted.size() < 48) {  // 16 bytes nonce + 32 bytes HMAC
         last_error_ = "SESS_KEY_NEG_RESP payload too short (" +
                       std::to_string(decrypted.size()) + " bytes)";
