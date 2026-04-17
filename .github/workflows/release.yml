@@ -1,0 +1,117 @@
+name: Release Binaries
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.0)'
+        required: true
+        default: 'v1.2.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-amd64
+            artifact: nanotuya-linux-amd64
+            archive: tar.gz
+          - os: macos-latest
+            name: macos-arm64
+            artifact: nanotuya-macos-arm64
+            archive: tar.gz
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ------------------ Linux ------------------
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libssl-dev libjsoncpp-dev libcurl4-openssl-dev
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_WITH_CLOUD=ON -DBUILD_EXAMPLES=ON -DBUILD_TESTS=OFF ..
+          make -j$(nproc)
+
+      # ------------------ macOS ------------------
+      - name: Install deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install openssl jsoncpp
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_WITH_CLOUD=ON -DBUILD_EXAMPLES=ON -DBUILD_TESTS=OFF ..
+          make -j$(sysctl -n hw.ncpu)
+
+      # ------------------ Package ------------------
+      - name: Package
+        run: |
+          mkdir -p dist/lib dist/include
+          cp build/libnanotuya.a dist/lib/
+          cp -r include/nanotuya dist/include/
+          [ -f build/query_device ] && cp build/query_device dist/ || true
+          cp VERSION dist/
+          [ -f README.md ] && cp README.md dist/ || true
+          [ -f LICENSE ] && cp LICENSE dist/ || true
+          tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f -name '*.tar.gz' -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          files: release/*

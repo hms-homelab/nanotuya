@@ -17,10 +17,14 @@ public:
     TuyaDevice(const TuyaDevice&) = delete;
     TuyaDevice& operator=(const TuyaDevice&) = delete;
 
-    // High-level operations
-    // Each call opens a fresh TCP connection, does handshake if v3.4, executes, closes.
-    // This matches the proven pattern from the Python bridge -- persistent connections
-    // are unreliable with Tuya devices.
+    // Persistent connection management.
+    // Call connect() once, then queryStatus()/setValue() reuse the socket.
+    // If not connected, each call opens a fresh connection and closes it after.
+    bool connect();
+    void disconnect();
+    bool isConnected() const { return sock_fd_ >= 0; }
+    bool heartbeat();
+
     std::optional<Json::Value> queryStatus();
     bool setValue(const std::string& dp_id, const Json::Value& value);
     bool setValues(const Json::Value& dps);
@@ -31,6 +35,7 @@ public:
 private:
     bool connectSocket();
     void disconnectSocket();
+    bool ensureConnected();
 
     // v3.4 session key negotiation (3-step HMAC handshake)
     // Step 1: Send SESS_KEY_NEG_START with 16-byte local_nonce

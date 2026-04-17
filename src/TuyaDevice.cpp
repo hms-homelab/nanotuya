@@ -313,24 +313,84 @@ std::optional<TuyaMessage> TuyaDevice::sendReceive(Command cmd,
 }
 
 // ---------------------------------------------------------------------------
+// Public persistent connection API
+// ---------------------------------------------------------------------------
+
+bool TuyaDevice::connect() {
+    if (isConnected()) return true;
+
+    seqno_ = 1;
+    active_key_ = config_.local_key;
+
+    if (!connectSocket()) return false;
+
+    if (config_.version == TuyaVersion::V34) {
+        if (!negotiateSessionKey()) {
+            disconnectSocket();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void TuyaDevice::disconnect() {
+    disconnectSocket();
+    session_key_.clear();
+    active_key_ = config_.local_key;
+}
+
+bool TuyaDevice::heartbeat() {
+    if (!isConnected()) return false;
+
+    auto frame = TuyaProtocol::buildMessage(
+        seqno_++, Command::HEART_BEAT, {}, config_.version, active_key_);
+    if (!sendAll(frame)) {
+        disconnectSocket();
+        return false;
+    }
+
+    auto resp_data = readFrame();
+    if (resp_data.empty()) {
+        disconnectSocket();
+        return false;
+    }
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// ensureConnected / cleanupIfEphemeral -- helpers for burst vs persistent
+// ---------------------------------------------------------------------------
+
+bool TuyaDevice::ensureConnected() {
+    if (isConnected()) return true;
+
+    seqno_ = 1;
+    active_key_ = config_.local_key;
+
+    if (!connectSocket()) return false;
+
+    if (config_.version == TuyaVersion::V34) {
+        if (!negotiateSessionKey()) {
+            disconnectSocket();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // queryStatus
 // ---------------------------------------------------------------------------
 
 std::optional<Json::Value> TuyaDevice::queryStatus() {
+    bool was_connected = isConnected();
+
     for (int retry = 0; retry <= config_.retry_limit; ++retry) {
-        seqno_ = 1;
-        active_key_ = config_.local_key;
-
-        if (!connectSocket()) {
+        if (!ensureConnected()) {
             continue;
-        }
-
-        // v3.4 requires session key negotiation
-        if (config_.version == TuyaVersion::V34) {
-            if (!negotiateSessionKey()) {
-                disconnectSocket();
-                continue;
-            }
         }
 
         auto payload = TuyaProtocol::makeStatusPayload(config_.id);
@@ -339,13 +399,15 @@ std::optional<Json::Value> TuyaDevice::queryStatus() {
                           : Command::DP_QUERY;
 
         auto resp = sendReceive(cmd, payload);
-        disconnectSocket();
 
-        if (!resp) continue;
+        if (!resp) {
+            disconnectSocket();
+            continue;
+        }
 
-        // Parse JSON from response payload
         if (resp->payload.empty()) {
             last_error_ = "Empty response payload";
+            if (!was_connected) disconnectSocket();
             continue;
         }
 
@@ -357,14 +419,16 @@ std::optional<Json::Value> TuyaDevice::queryStatus() {
         std::string parse_errors;
         if (!Json::parseFromStream(builder, stream, &root, &parse_errors)) {
             last_error_ = "JSON parse error: " + parse_errors;
+            if (!was_connected) disconnectSocket();
             continue;
         }
+
+        if (!was_connected) disconnectSocket();
 
         if (root.isMember("dps")) {
             return root["dps"];
         }
 
-        // Some devices return dps at top level
         last_error_ = "No 'dps' key in response";
         continue;
     }
@@ -383,19 +447,11 @@ bool TuyaDevice::setValue(const std::string& dp_id, const Json::Value& value) {
 }
 
 bool TuyaDevice::setValues(const Json::Value& dps) {
+    bool was_connected = isConnected();
+
     for (int retry = 0; retry <= config_.retry_limit; ++retry) {
-        seqno_ = 1;
-        active_key_ = config_.local_key;
-
-        if (!connectSocket()) {
+        if (!ensureConnected()) {
             continue;
-        }
-
-        if (config_.version == TuyaVersion::V34) {
-            if (!negotiateSessionKey()) {
-                disconnectSocket();
-                continue;
-            }
         }
 
         auto payload = TuyaProtocol::makeControlPayload(config_.id, dps);
@@ -404,9 +460,14 @@ bool TuyaDevice::setValues(const Json::Value& dps) {
                           : Command::CONTROL;
 
         auto resp = sendReceive(cmd, payload);
-        disconnectSocket();
 
-        if (resp) return true;
+        if (!resp) {
+            disconnectSocket();
+            continue;
+        }
+
+        if (!was_connected) disconnectSocket();
+        return true;
     }
 
     return false;
