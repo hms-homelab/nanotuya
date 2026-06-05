@@ -100,7 +100,7 @@ make -j$(nproc)
 include(FetchContent)
 FetchContent_Declare(nanotuya
     GIT_REPOSITORY https://github.com/hms-homelab/nanotuya.git
-    GIT_TAG v1.0.0
+    GIT_TAG v1.2.2
 )
 FetchContent_MakeAvailable(nanotuya)
 
@@ -118,7 +118,7 @@ else()
     include(FetchContent)
     FetchContent_Declare(nanotuya
         GIT_REPOSITORY https://github.com/hms-homelab/nanotuya.git
-        GIT_TAG v1.0.0
+        GIT_TAG v1.2.2
     )
     FetchContent_MakeAvailable(nanotuya)
 endif()
