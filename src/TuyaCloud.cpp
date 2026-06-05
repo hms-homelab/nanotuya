@@ -79,16 +79,19 @@ static Json::Value parseJson(const std::string& text) {
 
 TuyaCloud::TuyaCloud(const std::string& api_key, const std::string& api_secret,
                      const std::string& region)
-    : api_key_(api_key), api_secret_(api_secret) {
+    : api_key_(api_key), api_secret_(api_secret),
+      base_url_(regionBaseUrl(region)) {}
 
+std::string TuyaCloud::regionBaseUrl(const std::string& region) {
     if (region == "eu")
-        base_url_ = "https://openapi.tuyaeu.com";
-    else if (region == "cn")
-        base_url_ = "https://openapi.tuyacn.com";
-    else if (region == "in")
-        base_url_ = "https://openapi.tuyain.com";
-    else
-        base_url_ = "https://openapi.tuyaus.com";
+        return "https://openapi.tuyaeu.com";
+    if (region == "cn")
+        return "https://openapi.tuyacn.com";
+    if (region == "in")
+        return "https://openapi.tuyain.com";
+    if (region == "sg")
+        return "https://openapi.tuyasg.com";
+    return "https://openapi.tuyaus.com";
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +124,7 @@ bool TuyaCloud::ensureAccessToken() {
 
 Json::Value TuyaCloud::discoverDevices() {
     if (!ensureAccessToken())
-        return Json::Value(Json::arrayValue);
+        return Json::Value();  // null -> caller checks isNull() + lastError()
 
     Json::Value all_devices(Json::arrayValue);
     int page_no = 1;
@@ -133,6 +136,10 @@ Json::Value TuyaCloud::discoverDevices() {
         Json::Value resp = apiGet(path);
         if (!resp["success"].asBool()) {
             last_error_ = "discoverDevices failed: " + resp["msg"].asString();
+            // Signal failure (null) only if we have nothing yet; otherwise
+            // return the pages we did collect before the error.
+            if (all_devices.empty())
+                return Json::Value();
             break;
         }
 

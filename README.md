@@ -158,6 +158,14 @@ Common Tuya Data Points:
 | 1 | switch | bool | on/off |
 | 9 | countdown | int | seconds |
 
+## tinytuya Compatibility
+
+nanotuya implements the same Tuya local protocol as [tinytuya](https://github.com/jasonacox/tinytuya) and tracks it for protocol-level changes. The local protocol (v3.1/v3.3/v3.4) and the cloud datacenter list are kept in parity through **tinytuya 1.18.1**.
+
+- **Local protocol:** full parity. nanotuya reads the frame length dynamically (no fixed payload ceiling), so large frames such as IR-learn captures decode without the cap-raising fix tinytuya needed in 1.18.1.
+- **Cloud regions:** `us`, `eu`, `cn`, `in`, `sg` (Singapore) -- matches tinytuya's datacenter list.
+- **Out of scope:** tinytuya's Python-only surface (CLI, wizard, `devices.json` tooling, and the Contrib device classes like Bulb/IR/RF/Cover) is intentionally not ported -- nanotuya is just the protocol library.
+
 ## Related Projects
 
 - [hms-esp-tuya-ble](https://github.com/hms-homelab/hms-esp-tuya-ble) -- ESP32-C3 BLE-to-MQTT bridge for Tuya BLE devices

@@ -75,6 +75,7 @@ if(BUILD_TESTS)
     add_executable(run_tests
         tests/test_tuya_protocol.cpp
         tests/test_tuya_device.cpp
+        tests/test_tuya_cloud.cpp
     )
     target_link_libraries(run_tests nanotuya GTest::gtest GTest::gtest_main)
     add_test(NAME unit_tests COMMAND run_tests)

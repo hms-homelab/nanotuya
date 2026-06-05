@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-06-05
+
+### Added
+- Singapore (`sg`) cloud datacenter (`openapi.tuyasg.com`) -- matches tinytuya 1.18.1's region list
+- `TuyaCloud::regionBaseUrl()` static helper for region-to-URL mapping (unit-testable)
+- README "tinytuya Compatibility" section documenting protocol/region parity through tinytuya 1.18.1
+
+### Fixed
+- `discoverDevices()` now returns a null value (not an empty array) on failure, so callers can distinguish "discovery failed" from "0 devices found" via `isNull()` + `lastError()`
+
 ## [1.2.1] - 2026-04-16
 
 ### Fixed

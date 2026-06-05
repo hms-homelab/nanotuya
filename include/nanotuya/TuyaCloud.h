@@ -12,13 +12,19 @@ class TuyaCloud {
 public:
     /// @param api_key    Client ID from Tuya IoT Platform
     /// @param api_secret Client Secret from Tuya IoT Platform
-    /// @param region     API region: "us", "eu", "cn", "in"
+    /// @param region     API region: "us", "eu", "cn", "in", "sg" (default "us")
     TuyaCloud(const std::string& api_key, const std::string& api_secret,
               const std::string& region = "us");
+
+    /// Map a region code to its Tuya OpenAPI base URL.
+    /// Recognised: "us", "eu", "cn", "in", "sg". Unknown values fall back to US.
+    static std::string regionBaseUrl(const std::string& region);
 
     /// Discover all devices linked to this Tuya account.
     /// Returns JSON array of device objects with local keys:
     /// [{id, name, key, mac, category, product_name, online, ...}]
+    /// Returns a null value (not an empty array) on failure -- check with
+    /// isNull() and read lastError(); an empty array means "0 devices".
     Json::Value discoverDevices();
 
     /// Get status of a single device from cloud.
